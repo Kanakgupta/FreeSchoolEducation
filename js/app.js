@@ -242,6 +242,7 @@
         "<p class='concept-lead'><b>What it means:</b> " + esc(c.means) + "</p>",
         "<div class='concept-example'><b>Example:</b> " + esc(c.example) + "</div>",
         "<div class='concept-remember'><b>Remember:</b> " + esc(c.remember) + "</div>",
+        CO.getVisual(sk),
         "<div class='concept-cases'>",
           "<p class='cases-heading'>Explore every case</p>",
           "<div class='case-grid'>",
