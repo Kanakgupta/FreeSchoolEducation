@@ -6,6 +6,8 @@
 
   const C = global.CURRICULUM;
   const Q = global.QUIZ;
+  const CO = global.CONCEPTS;
+  const R = global.READING;
   const app = document.getElementById("app");
 
   function esc(s) {
@@ -156,8 +158,8 @@
     ]);
   }
 
-  // ---- Skill leaf (interactive practice) ----------------------------------
-  const session = {}; // keyed by skill id -> { asked, correct, streak }
+  // ---- Skill leaf: Concept + Practice sections ----------------------------
+  const session = {}; // keyed by stateKey -> { questions, answers, index, correct }
 
   function renderSkill(gradeId, subjectId, skillId) {
     const g = C.getGrade(gradeId), s = C.SUBJECTS[subjectId];
@@ -165,7 +167,21 @@
     if (!g || !s || !found) return renderHome();
     const sk = found.skill;
     const stateKey = gradeId + "/" + subjectId + "/" + skillId;
-    if (!session[stateKey]) session[stateKey] = { asked: 0, correct: 0, streak: 0 };
+
+    const isReading = sk.type === "reading";
+    let passage = null, questions;
+    if (isReading) {
+      const passages = R.getPassages(gradeId);
+      passage = passages[(sk.param || 0) % passages.length];
+      questions = Q.buildFromItems(passage.questions);
+    } else {
+      questions = Q.buildQuestionSet(sk);
+    }
+
+    if (!session[stateKey] || session[stateKey].skillVer !== questions.length) {
+      session[stateKey] = { questions: questions, answers: {}, index: 0, correct: 0, skillVer: questions.length, passage: passage };
+    }
+    const st = session[stateKey];
 
     app.innerHTML = h([
       crumb([
@@ -179,86 +195,144 @@
           "<span class='skill-code big'>" + esc(sk.code) + "</span>",
           "<h1>" + esc(sk.name) + "</h1>",
         "</header>",
-        "<div class='scoreboard'>",
-          "<span>Answered: <b id='sc-asked'>0</b></span>",
-          "<span>Correct: <b id='sc-correct'>0</b></span>",
-          "<span>Streak: <b id='sc-streak'>0</b></span>",
+        "<div class='tabs' role='tablist'>",
+          "<button class='tab active' id='tab-learn'>\uD83D\uDCD8 Learn the concept</button>",
+          "<button class='tab' id='tab-practice'>\u270F\uFE0F Practice \u00B7 " + st.questions.length + " questions</button>",
         "</div>",
-        "<div id='quiz' class='quiz'></div>",
+        "<section id='panel-learn' class='panel'>" + conceptMarkup(sk, passage) + "</section>",
+        "<section id='panel-practice' class='panel' hidden>" + practiceShell() + "</section>",
       "</div>",
     ]);
 
-    updateScore(stateKey);
-    nextQuestion(sk, stateKey);
+    const learnBtn = document.getElementById("tab-learn");
+    const pracBtn = document.getElementById("tab-practice");
+    const learnPanel = document.getElementById("panel-learn");
+    const pracPanel = document.getElementById("panel-practice");
+    function show(which) {
+      const learn = which === "learn";
+      learnBtn.classList.toggle("active", learn);
+      pracBtn.classList.toggle("active", !learn);
+      learnPanel.hidden = !learn;
+      pracPanel.hidden = learn;
+      if (!learn) renderQuestion(stateKey);
+    }
+    learnBtn.addEventListener("click", () => show("learn"));
+    pracBtn.addEventListener("click", () => show("practice"));
+    const startBtn = document.getElementById("start-practice");
+    if (startBtn) startBtn.addEventListener("click", () => show("practice"));
   }
 
-  function updateScore(stateKey) {
+  function conceptMarkup(sk, passage) {
+    if (passage) {
+      return h([
+        "<div class='concept'>",
+          "<p class='concept-lead'>Read the passage carefully, then head to Practice to answer questions about it.</p>",
+          "<article class='passage'>",
+            "<h2>" + esc(passage.title) + "</h2>",
+            passage.paragraphs.map((p) => "<p>" + esc(p) + "</p>").join(""),
+          "</article>",
+          "<div class='concept-tip'><b>Reading tip:</b> The best answer is always supported by a detail in the text. Reread before you choose.</div>",
+          "<button class='btn primary' id='start-practice'>Start practice \u2192</button>",
+        "</div>",
+      ]);
+    }
+    const c = CO.getConcept(sk);
+    return h([
+      "<div class='concept'>",
+        "<h2>" + esc(c.title) + "</h2>",
+        "<p class='concept-lead'><b>What it means:</b> " + esc(c.means) + "</p>",
+        "<div class='concept-example'><b>Example:</b> " + esc(c.example) + "</div>",
+        "<div class='concept-remember'><b>Remember:</b> " + esc(c.remember) + "</div>",
+        "<div class='concept-cases'>",
+          "<p class='cases-heading'>Explore every case</p>",
+          "<div class='case-grid'>",
+            c.cases.map((cs) => "<div class='case-card'><b>" + esc(cs[0]) + "</b><span>" + esc(cs[1]) + "</span></div>").join(""),
+          "</div>",
+        "</div>",
+        "<button class='btn primary' id='start-practice'>Start practice \u2192</button>",
+      "</div>",
+    ]);
+  }
+
+  function practiceShell() {
+    return h([
+      "<div class='scoreboard'>",
+        "<span>Question <b id='sc-index'>1</b> / <b id='sc-total'>20</b></span>",
+        "<span>Correct: <b id='sc-correct'>0</b></span>",
+        "<span id='sc-level' class='level-badge'>Easy</span>",
+      "</div>",
+      "<div class='qnav' id='qnav'></div>",
+      "<div id='quiz' class='quiz'></div>",
+    ]);
+  }
+
+  function renderQuestion(stateKey) {
     const st = session[stateKey];
-    const a = document.getElementById("sc-asked");
-    if (!a) return;
-    a.textContent = st.asked;
-    document.getElementById("sc-correct").textContent = st.correct;
-    document.getElementById("sc-streak").textContent = st.streak;
-  }
-
-  function nextQuestion(sk, stateKey) {
     const quiz = document.getElementById("quiz");
     if (!quiz) return;
-    const question = Q.generate(sk);
+    const question = st.questions[st.index];
+    const done = st.answers[st.index];
+
+    // Scoreboard + nav.
+    document.getElementById("sc-index").textContent = st.index + 1;
+    document.getElementById("sc-total").textContent = st.questions.length;
+    document.getElementById("sc-correct").textContent = st.correct;
+    const lvl = document.getElementById("sc-level");
+    lvl.textContent = question.level || "";
+    lvl.className = "level-badge level-" + (question.level || "Easy").toLowerCase();
+
+    const nav = document.getElementById("qnav");
+    nav.innerHTML = st.questions.map((_, k) =>
+      "<button class='qdot " + (k === st.index ? "active " : "") + (st.answers[k] ? "done" : "") + "' data-go='" + k + "'>" + (k + 1) + "</button>"
+    ).join("");
+    nav.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => { st.index = Number(b.dataset.go); renderQuestion(stateKey); }));
 
     let controls;
     if (question.mode === "mcq") {
       controls = "<div class='choices'>" +
-        question.choices.map((c, i) =>
-          "<button class='choice' data-val='" + esc(c) + "'>" + esc(c) + "</button>"
-        ).join("") + "</div>";
+        question.choices.map((c) => "<button class='choice' data-val=\"" + esc(c) + "\"" + (done ? " disabled" : "") + ">" + c + "</button>").join("") +
+        "</div>";
     } else {
       controls = "<div class='answer-row'>" +
-        "<input id='answer' class='answer-input' type='text' autocomplete='off' placeholder='Type your answer' />" +
-        "<button id='submit' class='btn primary'>Submit</button></div>";
+        "<input id='answer' class='answer-input' type='text' autocomplete='off' placeholder='Type your answer'" + (done ? " disabled" : "") + " />" +
+        "<button id='submit' class='btn primary'" + (done ? " disabled" : "") + ">Submit</button></div>";
     }
 
     quiz.innerHTML = h([
       "<div class='question'>" + question.prompt + "</div>",
       controls,
       "<div id='feedback' class='feedback'></div>",
+      "<div class='question-arrows'>",
+        "<button class='btn ghost' id='prevq'" + (st.index === 0 ? " disabled" : "") + ">\u2190 Previous</button>",
+        "<button class='btn ghost' id='nextq'" + (st.index === st.questions.length - 1 ? " disabled" : "") + ">Next \u2192</button>",
+      "</div>",
     ]);
 
     const feedback = document.getElementById("feedback");
+    const prevq = document.getElementById("prevq");
+    const nextq = document.getElementById("nextq");
+    if (prevq) prevq.addEventListener("click", () => { if (st.index > 0) { st.index--; renderQuestion(stateKey); } });
+    if (nextq) nextq.addEventListener("click", () => { if (st.index < st.questions.length - 1) { st.index++; renderQuestion(stateKey); } });
+
+    if (done) {
+      showResolved(question, done);
+      return;
+    }
 
     function grade(val) {
-      const st = session[stateKey];
       const ok = Q.check(question, val);
-      st.asked += 1;
-      if (ok) { st.correct += 1; st.streak += 1; } else { st.streak = 0; }
-      updateScore(stateKey);
-
-      if (question.mode === "mcq") {
-        document.querySelectorAll(".choice").forEach((b) => {
-          b.disabled = true;
-          if (b.dataset.val === question.answer) b.classList.add("correct");
-          else if (b.dataset.val === String(val)) b.classList.add("wrong");
-        });
-      } else {
-        const inp = document.getElementById("answer");
-        if (inp) { inp.disabled = true; inp.classList.add(ok ? "ok" : "bad"); }
-        const btn = document.getElementById("submit");
-        if (btn) btn.disabled = true;
-      }
-
-      feedback.innerHTML =
-        (ok ? "<div class='fb ok'>\u2713 Correct!</div>"
-            : "<div class='fb bad'>\u2717 Not quite. Answer: <b>" + esc(question.answer) + "</b></div>") +
-        (question.explanation ? "<div class='explain'>" + esc(question.explanation) + "</div>" : "") +
-        "<button id='next' class='btn next'>Next question \u2192</button>";
-      document.getElementById("next").addEventListener("click", () => nextQuestion(sk, stateKey));
-      document.getElementById("next").focus();
+      st.answers[st.index] = ok ? "correct" : "wrong";
+      if (ok) st.correct += 1;
+      document.getElementById("sc-correct").textContent = st.correct;
+      showResolved(question, st.answers[st.index], val);
+      // Update nav dot.
+      const dot = nav.querySelector("[data-go='" + st.index + "']");
+      if (dot) dot.classList.add("done");
+      if (Object.keys(st.answers).length === st.questions.length) setTimeout(() => showSummary(stateKey), 400);
     }
 
     if (question.mode === "mcq") {
-      quiz.querySelectorAll(".choice").forEach((b) => {
-        b.addEventListener("click", () => grade(b.dataset.val));
-      });
+      quiz.querySelectorAll(".choice").forEach((b) => b.addEventListener("click", () => grade(b.dataset.val)));
     } else {
       const inp = document.getElementById("answer");
       const submit = document.getElementById("submit");
@@ -266,6 +340,56 @@
       inp.addEventListener("keydown", (e) => { if (e.key === "Enter") grade(inp.value); });
       inp.focus();
     }
+  }
+
+  function showResolved(question, result, val) {
+    const ok = result === "correct";
+    if (question.mode === "mcq") {
+      document.querySelectorAll(".choice").forEach((b) => {
+        b.disabled = true;
+        if (b.dataset.val === question.answer) b.classList.add("correct");
+        else if (val !== undefined && b.dataset.val === String(val)) b.classList.add("wrong");
+      });
+    } else {
+      const inp = document.getElementById("answer");
+      if (inp) { inp.disabled = true; inp.value = val !== undefined ? val : inp.value; inp.classList.add(ok ? "ok" : "bad"); }
+      const submit = document.getElementById("submit");
+      if (submit) submit.disabled = true;
+    }
+    const feedback = document.getElementById("feedback");
+    if (!feedback) return;
+    feedback.innerHTML =
+      (ok ? "<div class='fb ok'>\u2713 " + celebrate() + "</div>"
+          : "<div class='fb bad'>\u2717 The answer is <b>" + esc(question.answer) + "</b>.</div>") +
+      (question.explanation ? "<div class='explain'>" + esc(question.explanation) + "</div>" : "");
+  }
+
+  const CHEERS = ["Correct!", "Nice work!", "You nailed it!", "Brilliant!", "Well done!", "Spot on!", "Great thinking!", "Superb!"];
+  function celebrate() { return CHEERS[Math.floor(Math.random() * CHEERS.length)]; }
+
+  function showSummary(stateKey) {
+    const st = session[stateKey];
+    const total = st.questions.length;
+    const correct = st.correct;
+    const pct = Math.round((correct / total) * 100);
+    const tier = pct >= 90 ? ["Diamond", "\u25C6"] : pct >= 70 ? ["Gold", "\u2605"] : pct >= 50 ? ["Silver", "\u25CF"] : ["Bronze", "\u25B2"];
+    const quiz = document.getElementById("quiz");
+    if (!quiz) return;
+    document.getElementById("qnav").innerHTML = "";
+    quiz.innerHTML = h([
+      "<div class='summary'>",
+        "<div class='summary-coin " + tier[0].toLowerCase() + "'>" + tier[1] + "</div>",
+        "<h2>" + tier[0] + " \u2014 " + correct + " / " + total + " correct</h2>",
+        "<p class='muted'>" + (pct >= 70 ? "Excellent work! Try a harder skill next." : "Good effort \u2014 review the concept and try again to improve.") + "</p>",
+        "<button class='btn primary' id='retry'>Practice again</button>",
+      "</div>",
+    ]);
+    document.getElementById("retry").addEventListener("click", () => {
+      delete session[stateKey];
+      const parts = location.hash.replace(/^#\/?/, "").split("/");
+      renderSkill(parts[1], parts[2], parts[3]);
+      document.getElementById("tab-practice").click();
+    });
   }
 
   // ---- Search -------------------------------------------------------------

@@ -183,6 +183,10 @@
           ["Identify nouns", "mcq", 2], ["Identify verbs", "mcq", 2],
           ["Complete the sentence", "mcq", 2],
         ]},
+        { name: "Reading comprehension", skills: [
+          ["Read a short story", "reading", [0]],
+          ["Read and answer questions", "reading", [1]],
+        ]},
       ],
       elementary: [
         { name: "Vocabulary", skills: [
@@ -195,8 +199,9 @@
           ["Commas", "mcq", 2],
         ]},
         { name: "Reading comprehension", skills: [
-          ["Main idea", "mcq", 2], ["Sequence of events", "mcq", 2],
-          ["Context clues", "mcq", 2],
+          ["Read: find the main idea", "reading", [0]],
+          ["Read: use text details", "reading", [1]],
+          ["Read: informational text", "reading", [2]],
         ]},
       ],
       middle: [
@@ -208,9 +213,9 @@
           ["Phrases and clauses", "mcq", 2], ["Active and passive voice", "mcq", 2],
           ["Punctuation", "mcq", 2], ["Parallel structure", "mcq", 2],
         ]},
-        { name: "Reading and analysis", skills: [
-          ["Theme", "mcq", 2], ["Author's purpose", "mcq", 2],
-          ["Text structure", "mcq", 2],
+        { name: "Reading comprehension", skills: [
+          ["Read: main idea and theme", "reading", [0]],
+          ["Read: analyze an informational text", "reading", [1]],
         ]},
       ],
       high: [
@@ -222,9 +227,9 @@
           ["Semicolons and colons", "mcq", 2], ["Misplaced modifiers", "mcq", 2],
           ["Formal and informal language", "mcq", 2],
         ]},
-        { name: "Reading and rhetoric", skills: [
-          ["Claims and evidence", "mcq", 2], ["Rhetorical devices", "mcq", 2],
-          ["Audience and tone", "mcq", 2],
+        { name: "Reading comprehension", skills: [
+          ["Read: claims and evidence", "reading", [0]],
+          ["Read: rhetoric and tone", "reading", [1]],
         ]},
       ],
     },
