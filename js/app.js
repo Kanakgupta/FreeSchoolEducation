@@ -171,8 +171,7 @@
     const isReading = sk.type === "reading";
     let passage = null, questions;
     if (isReading) {
-      const passages = R.getPassages(gradeId);
-      passage = passages[(sk.param || 0) % passages.length];
+      passage = sk.story || (R.getChapters(gradeId)[0] || { stories: [] }).stories[0];
       questions = Q.buildFromItems(passage.questions);
     } else {
       questions = Q.buildQuestionSet(sk);

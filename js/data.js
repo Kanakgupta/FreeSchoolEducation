@@ -183,10 +183,6 @@
           ["Identify nouns", "mcq", 2], ["Identify verbs", "mcq", 2],
           ["Complete the sentence", "mcq", 2],
         ]},
-        { name: "Reading comprehension", skills: [
-          ["Read a short story", "reading", [0]],
-          ["Read and answer questions", "reading", [1]],
-        ]},
       ],
       elementary: [
         { name: "Vocabulary", skills: [
@@ -198,11 +194,6 @@
           ["Subject-verb agreement", "mcq", 2], ["Capitalization", "mcq", 2],
           ["Commas", "mcq", 2],
         ]},
-        { name: "Reading comprehension", skills: [
-          ["Read: find the main idea", "reading", [0]],
-          ["Read: use text details", "reading", [1]],
-          ["Read: informational text", "reading", [2]],
-        ]},
       ],
       middle: [
         { name: "Vocabulary and word study", skills: [
@@ -213,10 +204,6 @@
           ["Phrases and clauses", "mcq", 2], ["Active and passive voice", "mcq", 2],
           ["Punctuation", "mcq", 2], ["Parallel structure", "mcq", 2],
         ]},
-        { name: "Reading comprehension", skills: [
-          ["Read: main idea and theme", "reading", [0]],
-          ["Read: analyze an informational text", "reading", [1]],
-        ]},
       ],
       high: [
         { name: "Advanced vocabulary", skills: [
@@ -226,10 +213,6 @@
         { name: "Grammar and style", skills: [
           ["Semicolons and colons", "mcq", 2], ["Misplaced modifiers", "mcq", 2],
           ["Formal and informal language", "mcq", 2],
-        ]},
-        { name: "Reading comprehension", skills: [
-          ["Read: claims and evidence", "reading", [0]],
-          ["Read: rhetoric and tone", "reading", [1]],
         ]},
       ],
     },
@@ -353,6 +336,22 @@
       letterIdx += 1;
       return { name: cat.name, skills: skills };
     });
+
+    // Inject the exact reading-comprehension story chapters for Language arts.
+    if (subjectId === "ela" && global.READING && global.READING.getChapters) {
+      global.READING.getChapters(gradeId).forEach((chap) => {
+        const letter = letters[letterIdx] || "Z";
+        letterIdx += 1;
+        const skills = chap.stories.map((story, si) => ({
+          code: letter + "." + (si + 1),
+          name: story.title,
+          type: "reading",
+          story: story,
+          id: (slug(story.title) + "-" + letter + (si + 1)).toLowerCase(),
+        }));
+        categories.push({ name: chap.name, skills: skills });
+      });
+    }
 
     _cache[key] = { categories: categories };
     return _cache[key];
